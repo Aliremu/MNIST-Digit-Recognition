@@ -80,7 +80,9 @@ void PaintWindow(HWND hwnd) {
 		}
 	}
 
-	RECT rect{300, 300, 400, 400};
+	RECT line{ GRID_WINDOW, 0, GRID_WINDOW + 3, WINDOW_SIZE_Y };
+	FillRect(hdc, &line, WHITE);
+
 	SetTextColor(hdc, RGB(255, 255, 255));
 	SetBkColor(hdc, RGB(0, 0, 0));
 
@@ -198,7 +200,7 @@ int create_window(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, 
 
 	ATOM wClass = RegisterClassA(&wc);
 	if (!wClass) {
-		fprintf(stderr, "%s\n", "Couldn’t create Window Class");
+		fprintf(stderr, "%s\n", "Couldnâ€™t create Window Class");
 		return 1;
 	}
 
