@@ -8,7 +8,8 @@
 #include <random>
 #include <fstream>
 #include <iostream>
-#include <omp.h>
+#include <thread>
+#include <future>
 
 #include "Window.h"
 
@@ -28,7 +29,7 @@ float sigmoid(float x) {
 }
 
 float df(float x) {
-	return x * (1 - x);
+	return sigmoid(x) * (1 - sigmoid(x));
 }
 
 vec_t df(const vec_t& y, size_t i) {
@@ -149,14 +150,13 @@ public:
 		vec_t prev_delta;
 		prev_delta.resize(prev->in_size);
 
-		#pragma omp parallel for 
 		for (size_t i = 0; i < in_size; i++) {
 			vec_t& w = prev->weights[i];
 
 			for (size_t j = 0; j < w.size(); j++) {
-				w[j] = w[j] + (0.05f * delta[i] * prev->values[j]);
+				w[j] = w[j] + (0.1f * delta[i] * prev->values[j]);
 
-				prev_delta[j] = prev->values[j] * (1.0f - prev->values[j]) * w[j] * delta[i];
+				prev_delta[j] = delta[i] * w[j] * df(prev->values[j]);
 			}
 		}
 
@@ -177,7 +177,7 @@ public:
 	void back_propogate(vec_t labels) {
 		vec_t delta(tail()->in_size);
 		for (size_t i = 0; i < tail()->in_size; i++) {
-			delta[i] = tail()->values[i] * (1.0f - tail()->values[i]) * (labels[i] - tail()->values[i]);
+			delta[i] = (labels[i] - tail()->values[i]) * df(tail()->values[i]);
 		}
 
 		tail()->back_propogate(delta);
@@ -286,9 +286,6 @@ vector<vec_t> read_labels(string path) {
 			file.read((char*)&temp, sizeof(temp));
 
 			labels[i][temp] = 1.0f;
-			//float gray = temp / 255.0f;
-
-			//printf("%s", gray > 0.5f ? "@" : "-");
 		}
 
 		return labels;
@@ -321,8 +318,6 @@ void update() {
 		}
 	}
 
-	print_image(image);
-
 	cnn.input(image);
 	cnn.forward_propogate();
 	
@@ -330,28 +325,38 @@ void update() {
 	draw_results(output);
 }
 
-int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
-	create_window(hInstance, hPrevInstance, pCmdLine, nCmdShow);
-	bind_handler(&update);
-	draw_results({ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
-
+void do_stuff() {
 	vector<vec_t> images = read_images("data/train-images.idx3-ubyte");
 	vector<vec_t> labels = read_labels("data/train-labels.idx1-ubyte");
 
-	Ref<Layer> input = make_shared<Layer>(28 * 28, 200, 0, 0);
-	Ref<Layer> hidden1 = make_shared<Layer>(200, 80, 0, 0);
-	Ref<Layer> hidden2 = make_shared<Layer>(80, 10, 0, 0);
+	Ref<Layer> input = make_shared<Layer>(28 * 28, 300, 0, 0);
+	//Ref<Layer> hidden1 = make_shared<Layer>(200, 80, 0, 0);
+	Ref<Layer> hidden2 = make_shared<Layer>(300, 10, 0, 0);
 	Ref<Layer> output = make_shared<Layer>(10, 10, 0, 0);
 
 	cnn.add(input);
-	cnn.add(hidden1);
+	//cnn.add(hidden1);
 	cnn.add(hidden2);
 	cnn.add(output);
 	cnn.init();
 
 	cout << "Training..." << endl;
 
-	for (int i = 0; i < 60000; i++) {
+	for (int i = 0; i < 3000; i++) {
+		input->values = images[i];
+
+		cnn.forward_propogate();
+		cnn.back_propogate(labels[i]);
+	}
+
+	for (int i = 0; i < 3000; i++) {
+		input->values = images[i];
+
+		cnn.forward_propogate();
+		cnn.back_propogate(labels[i]);
+	}
+
+	for (int i = 0; i < 3000; i++) {
 		input->values = images[i];
 
 		cnn.forward_propogate();
@@ -360,19 +365,16 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLin
 
 	cout << "Results!" << endl;
 
-	//print_image(images[10000]);
-
 	int correct = 0;
 
-	#pragma omp parallel for 
-	for (int i = 10000; i < 10100; i++) {
+	for (int i = 20000; i < 21000; i++) {
 		cnn.input(images[i]);
 
 		cnn.forward_propogate();
 
 		vec_t output = cnn.get_output();
 
-		int guess  = std::max_element(output.begin(), output.end()) - output.begin();
+		int guess = std::max_element(output.begin(), output.end()) - output.begin();
 		int actual = std::max_element(labels[i].begin(), labels[i].end()) - labels[i].begin();
 
 		if (guess == actual) {
@@ -386,17 +388,23 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLin
 		printf("%d | %d\n", guess, actual);
 	}
 
-	printf("Accuracy: %.3f\n", correct / 100.0f);
-	
-	//for (int i = 0; i < 10; i++) {
-	//	printf("%d - PRE: %f | ACT: %f\n", i, cnn.get_output()[i], labels[10000][i]);
-	//}
+	printf("Accuracy: %.3f\n", correct / 1000.0f);
+}
+
+int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
+	create_window(hInstance, hPrevInstance, pCmdLine, nCmdShow);
+	bind_handler(&update);
+	draw_results({ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+
+	thread background(do_stuff);
 
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0) > 0) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+
+	background.join();
 
 	return msg.wParam;
 }
