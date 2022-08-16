@@ -5,5 +5,4 @@
 ![2](https://xirei.moe/uploader/?f=o5kyixpt.png)
 ![6](https://xirei.moe/uploader/?f=1i1r6pln.png)
 
-dodgy percentages ^
-probably need to fine-tune back propogation or learning rate
+I could probably increase the AI's accuracy by introducing noise and random transforms into the training data
